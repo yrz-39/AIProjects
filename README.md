@@ -35,9 +35,9 @@ Python 工程
 | 阶段 B：SQLite 笔记保存 | 已完成 | 笔记增查、按 ID 查看、404、课程分类、数据库迁移 |
 | 阶段 C：假 LLM | 下一阶段 | 固定返回结构化问答卡，先打通业务流程 |
 | 阶段 D：真实模型 API | 未开始 | OpenAI-compatible API、Prompt、JSON 解析与异常处理 |
-| 阶段 E：测试与收束 | 未开始 | 测试补全、HTML 转义、README 完善与本地复现验证 |
+| 阶段 E：测试与收束 | 未开始 | 测试补全、模板化、README 完善与本地复现验证 |
 
-> 当前项目尚未执行 Git commit 或 push。工作区中的 SQLite 数据库、缓存和虚拟环境不应提交。
+> 当前项目已完成本地 Git 提交，但尚未 push 到 GitHub。工作区中的 SQLite 数据库、缓存和虚拟环境不应提交。
 
 ## 3. 技术栈
 
@@ -62,7 +62,7 @@ AiStudyAssistant/
 ├── README.md
 ├── .venv/                      # 项目专属 Python 环境，不提交
 ├── .vscode/
-│   └── setting.json            # VS Code 解释器设置
+│   └── settings.json           # VS Code 解释器设置
 ├── .hermes/
 │   └── plans/                  # 项目学习蓝图
 ├── app/
@@ -319,7 +319,7 @@ def view_note(note_id: int):
 
 这些不是当前阶段的阻塞问题，但在项目收束前需要处理：
 
-- 使用 HTML 转义，避免用户输入直接插入 HTML；
+- 已使用 `html.escape` 转义用户输入，避免直接插入 HTML；
 - 将内嵌 HTML 页面拆分为模板或静态文件；
 - 使用 Pydantic schema 统一 API 输入输出；
 - 为数据库操作、空内容、404 和生成流程补充测试；
