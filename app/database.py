@@ -1,10 +1,12 @@
 import sqlite3
+from pathlib import Path
 
 # 数据库文件路径
-DB_PATH = "data/app.db"
+DB_PATH = str(Path(__file__).resolve().parent.parent / "data" / "app.db")
 
 def get_connection():
     # conn是一个连接对象，对数据库的操作都通过它
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
