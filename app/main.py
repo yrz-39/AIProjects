@@ -1,5 +1,5 @@
 from html import escape
-
+from app import services
 from fastapi import FastAPI,Form,HTTPException
 from fastapi.responses import HTMLResponse
 from app.note_validation import validate_note
@@ -90,5 +90,63 @@ def view_note(note_id : int):
                 f"<small>{escape(note['created_at'])}</small>"
                 f"</div><hr>"
             )
+    html_parts.append(
+                f"<h2>生成学习材料</h2>"
+                f'<form action="/api/notes/{note_id}/generations" method="post">'
+                f'<label for="mode">生成类型：</label>'
+                f'<select id="mode" name="mode">'
+                f'<option value="flashcards">生成问答卡</option>'
+                f'<option value="outline">生成复习提纲</option>'
+                f"</select>"
+                f'<button type="submit">生成</button>'
+                f"</form>"
+            )
     html_parts.append('<a href="/">返回首页</a>')
     return HTMLResponse("".join(html_parts))
+
+def render_generation_result(generation: dict) -> str:
+    """把生成记录渲染成结构化的 HTML 片段"""
+    mode = generation["mode"]
+    result = generation["result"]
+
+    if mode == "flashcards":
+        parts = ["<h2>问答卡</h2>"]
+        for card in result["cards"]:
+            parts.append(
+                "<div style=\"border:1px solid #ccc;border-radius:8px;"
+                "padding:12px;margin:12px 0\">"
+                f"<h3>{escape(card.get('question', ''))}</h3>"
+                f"<p>{escape(card.get('answer', ''))}</p>"
+                f"<small>标签：{escape(card.get('tag', ''))}</small>"
+                "</div>"
+            )
+        return "".join(parts)
+
+    if mode == "outline":
+        parts = ["<h2>复习提纲</h2>", "<ol>"]
+        for point in result["outline"]:
+            parts.append(f"<li>{escape(point)}</li>")
+        parts.append("</ol>")
+        return "".join(parts)
+
+    return f"<p>未知模式：{escape(mode)}</p>"
+
+
+@app.post("/api/notes/{note_id}/generations")
+def create_generation(note_id: int, mode: str = Form()):
+    try:
+        generation = services.generate_for_note(note_id, mode)
+
+        if generation is None:
+            raise HTTPException(status_code=404, detail="笔记不存在")
+
+        body = render_generation_result(generation)
+
+        return HTMLResponse(
+            f"<h1>生成成功</h1>"
+            f"{body}"
+            f'<a href="/api/notes/{note_id}">返回笔记</a>'
+        )
+
+    except ValueError as error:
+        return HTMLResponse(f"<p>错误：{escape(str(error))}</p>", status_code=400)

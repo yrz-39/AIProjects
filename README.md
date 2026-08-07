@@ -1,6 +1,6 @@
 # AI 问答卡与复习提纲助手
 
-> 一个用于学习 AI 应用开发的本地 Python 项目。当前已完成项目环境、FastAPI 网页、SQLite 笔记持久化与课程分类；下一阶段将先用假 LLM 打通问答卡生成流程。
+> 一个用于学习 AI 应用开发的本地 Python 项目。当前已完成项目环境、FastAPI 网页、SQLite 笔记持久化与课程分类，并已用假 LLM 打通问答卡/复习提纲的生成闭环；下一阶段将接入真实模型 API。
 
 ## 1. 项目目标
 
@@ -33,11 +33,11 @@ Python 工程
 |---|---|---|
 | 阶段 A：项目与最小网页 | 已完成 | Python 3.11、uv、FastAPI、HTML 表单、GET/POST 路由 |
 | 阶段 B：SQLite 笔记保存 | 已完成 | 笔记增查、按 ID 查看、404、课程分类、数据库迁移 |
-| 阶段 C：假 LLM | 下一阶段 | 固定返回结构化问答卡，先打通业务流程 |
-| 阶段 D：真实模型 API | 未开始 | OpenAI-compatible API、Prompt、JSON 解析与异常处理 |
+| 阶段 C：假 LLM | 已完成 | 假 LLM 生成问答卡/复习提纲，generations 表保存，结构化结果展示 |
+| 阶段 D：真实模型 API | 下一阶段 | OpenAI-compatible API、Prompt、JSON 解析与异常处理 |
 | 阶段 E：测试与收束 | 未开始 | 测试补全、模板化、README 完善与本地复现验证 |
 
-> 当前项目已完成本地 Git 提交，但尚未 push 到 GitHub。工作区中的 SQLite 数据库、缓存和虚拟环境不应提交。
+> 当前项目已完成阶段 A～C 的开发，代码已提交并推送至 GitHub。工作区中的 SQLite 数据库、缓存和虚拟环境不应提交。
 
 ## 3. 技术栈
 
@@ -70,7 +70,9 @@ AiStudyAssistant/
 │   ├── main.py                 # FastAPI 应用、页面与路由
 │   ├── note_validation.py      # 笔记正文清理
 │   ├── database.py             # SQLite 连接、建表与迁移
-│   └── repositories.py         # notes 表的增查操作
+│   ├── repositories.py         # notes / generations 表的读写
+│   ├── services.py             # 生成流程：查笔记 → 生成 → 保存
+│   └── llm_client.py           # 假 LLM：返回固定结构化结果
 ├── data/
 │   └── app.db                 # SQLite 数据库，运行时自动生成
 └── tests/
@@ -145,6 +147,7 @@ uv run uvicorn app.main:app --reload --port 8001
 | `POST` | `/api/notes` | 创建一篇笔记 | HTML 成功页 |
 | `GET` | `/api/notes` | 查看全部笔记 | HTML 列表页 |
 | `GET` | `/api/notes/{note_id}` | 查看指定笔记 | HTML 详情页；不存在时 404 JSON |
+| `POST` | `/api/notes/{note_id}/generations` | 对笔记生成问答卡或复习提纲 | 生成结果页；404 / 400 |
 
 ### 当前 POST 表单字段
 
@@ -152,6 +155,7 @@ uv run uvicorn app.main:app --reload --port 8001
 course    可选，课程名称，例如“数据结构”
 title     可选，笔记标题
 content   必填，笔记正文
+mode      生成模式：flashcards（问答卡）/ outline（复习提纲）
 ```
 
 ### 手工验证示例
@@ -162,7 +166,8 @@ content   必填，笔记正文
 3. 点击“提交笔记”
 4. 打开 /api/notes 查看列表
 5. 根据列表中的 ID 打开 /api/notes/{id}
-6. 打开一个不存在的 ID，例如 /api/notes/999999
+6. 在详情页选择“生成问答卡”或“生成复习提纲”，点击“生成”
+7. 打开一个不存在的 ID，例如 /api/notes/999999
 ```
 
 不存在的笔记应返回：
@@ -258,6 +263,34 @@ def view_note(note_id: int):
 
 这里的 `{note_id}` 是路径参数。FastAPI 会把 URL 中的文本转换成 `int`，再传给函数。
 
+### 8.5 生成流程（阶段 C）
+
+假 LLM 负责把笔记转换成结构化结果，目前支持两种模式：
+
+```text
+mode=flashcards → {"cards": [{"question", "answer", "tag"}, ...]}
+mode=outline    → {"outline": ["要点1", "要点2", ...]}
+```
+
+服务层 `services.generate_for_note(note_id, mode)` 组装完整流程：
+
+```text
+查笔记（不存在 → None）
+→ 假 LLM 生成结构化 dict
+→ 存入 generations 表（JSON 序列化）
+→ 返回含 id 的生成记录
+```
+
+路由 `POST /api/notes/{note_id}/generations` 处理三种情况：
+
+| 情况 | 返回 |
+|---|---|
+| 笔记不存在 | 404 |
+| 不支持的 mode | 400 |
+| 生成成功 | 结构化 HTML（卡片 / 有序列表） |
+
+页面展示由 `render_generation_result()` 完成：按 mode 分支渲染，所有动态内容仍经 `html.escape()` 转义。
+
 ## 9. 时间线与实现步骤
 
 ### 2026-07-23 至 2026-07-24：环境与项目骨架
@@ -294,38 +327,47 @@ def view_note(note_id: int):
 - 修改网页表单、POST 路由、列表页和详情页，完整接入课程分类。
 - 实际验证保存、列表、详情、404，并确认 pytest 现有测试通过。
 
+### 2026-08-07：阶段 C 假 LLM 生成闭环
+
+- 建立 `llm_client.py` 假 LLM，支持 `flashcards` / `outline` 两种模式。
+- 建立 `services.py` 服务层，组装「查笔记 → 生成 → 保存 → 返回记录」。
+- 新增 `generations` 表，`add_generation()` / `list_generations()` 负责 JSON 序列化与反序列化。
+- 详情页增加「生成学习材料」表单（`<select>` 下拉选择模式）。
+- 新增 `POST /api/notes/{note_id}/generations` 路由，处理 404 / 400 / 成功三分支。
+- 将生成结果从裸 JSON 美化为结构化问答卡 / 有序列表渲染。
+- 用 ASGI 冒烟测试验证全链路：生成、保存、读回、404、400 均通过。
+
 ## 10. 下一阶段
 
-阶段 C 先不调用真实模型，而是建立假 LLM：
+阶段 D 接入真实模型 API（OpenAI-compatible 格式）：
 
 ```text
 选择一篇笔记
-→ 调用本地假 client
-→ 返回固定 JSON 问答卡
+→ 调用真实 LLM API（DeepSeek 中转）
+→ 解析结构化 JSON 问答卡
 → 保存 generation 记录
 → 页面展示结果
 ```
 
 计划新增的概念：
 
-- `generations` 表；
-- `note_id` 外键关系；
-- `outline` / `flashcards` 模式；
-- Python 字典与 JSON 的序列化、反序列化；
-- 可替换的 LLM client；
-- 为什么先用假服务打通流程，再接真实 API。
+- `.env` 管理 API Key，`.env.example` 占位；
+- OpenAI-compatible 请求；
+- Prompt 设计：让模型按固定 JSON 结构返回；
+- 输出解析与容错（模型偶发不守格式）；
+- 超时、限流与失败重试；
+- 可替换的 LLM client 抽象（假 LLM 与真 API 切换）。
 
 ## 11. 当前待改进项
 
 这些不是当前阶段的阻塞问题，但在项目收束前需要处理：
 
-- 已使用 `html.escape` 转义用户输入，避免直接插入 HTML；
 - 将内嵌 HTML 页面拆分为模板或静态文件；
 - 使用 Pydantic schema 统一 API 输入输出；
-- 为数据库操作、空内容、404 和生成流程补充测试；
-- 完善异常处理和连接释放策略；
+- 为数据库操作、空内容、404 和生成流程补充测试（阶段 E）；
 - 增加列表页到详情页的链接；
-- 接入真实模型前补 `.env.example`，绝不提交真实 API Key。
+- 接入真实模型时补 `.env.example`，绝不提交真实 API Key；
+- 代码风格统一（ruff 格式化）。
 
 ## 12. 相关学习笔记
 

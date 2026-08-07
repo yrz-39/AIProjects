@@ -27,6 +27,16 @@ def init_db():
     column_names = [column[1] for column in columns]
     if "course" not in column_names:
         conn.execute("ALTER TABLE notes ADD COLUMN course TEXT DEFAULT ''")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS generations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            note_id INTEGER NOT NULL,
+            mode TEXT NOT NULL,
+            content_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     # 确认保存 将改动写入磁盘
     conn.commit()
     # 释放连接资源
