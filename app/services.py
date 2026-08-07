@@ -1,11 +1,18 @@
 from app import repositories as repo
 from app import llm_client
+from app.config import get_config
+
 
 def generate_for_note(note_id: int, mode: str) -> dict|None:
     note = repo.get_note(note_id)
     if not note:
         return None
-    result = llm_client.generate(note,mode)
+    
+    cfg = get_config()
+    if cfg["provider"] == "real":
+        result = llm_client.generate_real(note, mode)
+    else:
+        result = llm_client.generate(note, mode)
 
     generation_id= repo.add_generation(note_id, mode, result)
 

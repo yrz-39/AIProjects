@@ -1,6 +1,6 @@
 # AI 问答卡与复习提纲助手
 
-> 一个用于学习 AI 应用开发的本地 Python 项目。当前已完成项目环境、FastAPI 网页、SQLite 笔记持久化与课程分类，并已用假 LLM 打通问答卡/复习提纲的生成闭环；下一阶段将接入真实模型 API。
+> 一个用于学习 AI 应用开发的本地 Python 项目。当前已完成项目环境、FastAPI 网页、SQLite 笔记持久化、课程分类、假 LLM 生成闭环，并已接入真实 DeepSeek API（可在假/真模式间切换）；下一阶段将补齐调用容错。
 
 ## 1. 项目目标
 
@@ -34,7 +34,7 @@ Python 工程
 | 阶段 A：项目与最小网页 | 已完成 | Python 3.11、uv、FastAPI、HTML 表单、GET/POST 路由 |
 | 阶段 B：SQLite 笔记保存 | 已完成 | 笔记增查、按 ID 查看、404、课程分类、数据库迁移 |
 | 阶段 C：假 LLM | 已完成 | 假 LLM 生成问答卡/复习提纲，generations 表保存，结构化结果展示 |
-| 阶段 D：真实模型 API | 下一阶段 | OpenAI-compatible API、Prompt、JSON 解析与异常处理 |
+| 阶段 D：真实模型 API | 进行中 | 配置层、真实调用、假/真开关已完成；容错待补 |
 | 阶段 E：测试与收束 | 未开始 | 测试补全、模板化、README 完善与本地复现验证 |
 
 > 当前项目已完成阶段 A～C 的开发，代码已提交并推送至 GitHub。工作区中的 SQLite 数据库、缓存和虚拟环境不应提交。
@@ -46,6 +46,8 @@ Python 工程
 - FastAPI：Web 应用框架
 - Uvicorn：运行 FastAPI 的 ASGI 服务器
 - SQLite：本地嵌入式数据库
+- `openai`：OpenAI-compatible API 客户端（连接 DeepSeek）
+- `python-dotenv`：从 `.env` 加载环境变量（密钥不入代码）
 - 原生 HTML：当前页面展示与表单
 - pytest：当前已有基础测试依赖与 1 条输入校验测试
 
@@ -72,7 +74,8 @@ AiStudyAssistant/
 │   ├── database.py             # SQLite 连接、建表与迁移
 │   ├── repositories.py         # notes / generations 表的读写
 │   ├── services.py             # 生成流程：查笔记 → 生成 → 保存
-│   └── llm_client.py           # 假 LLM：返回固定结构化结果
+│   ├── llm_client.py           # 假 LLM + 真实 DeepSeek 调用
+│   └── config.py               # 环境变量读取（密钥/地址/模型/开关）
 ├── data/
 │   └── app.db                 # SQLite 数据库，运行时自动生成
 └── tests/
@@ -337,26 +340,31 @@ mode=outline    → {"outline": ["要点1", "要点2", ...]}
 - 将生成结果从裸 JSON 美化为结构化问答卡 / 有序列表渲染。
 - 用 ASGI 冒烟测试验证全链路：生成、保存、读回、404、400 均通过。
 
+### 2026-08-07：阶段 D 接入真实 DeepSeek API
+
+- 用 `python-dotenv` 建立 `.env` 配置层（密钥/地址/模型），`config.py` 统一读取并校验缺失项。
+- 用 `openai` SDK 调用 DeepSeek（OpenAI-compatible 接口）：`OpenAI(api_key, base_url, timeout)` 建立连接，`chat.completions.create` 发送 messages。
+- 用 system Prompt 约束模型「只输出 JSON」，`json.loads` 解析并校验 `cards` / `outline` 字段。
+- 处理 `content=None`（模型空回复）与坏 JSON 的清晰报错。
+- 新增 `LLM_PROVIDER` 开关（fake / real），`services.py` 按开关分发，上层路由与渲染零改动。
+- 实测：真实模型根据「二叉树」笔记生成对应问答卡，链路验证通过。
+
 ## 10. 下一阶段
 
-阶段 D 接入真实模型 API（OpenAI-compatible 格式）：
+阶段 D 收尾——调用容错与稳定化：
 
 ```text
-选择一篇笔记
-→ 调用真实 LLM API（DeepSeek 中转）
-→ 解析结构化 JSON 问答卡
-→ 保存 generation 记录
-→ 页面展示结果
+真实 LLM 调用失败（断网 / 超时 / 模型抽风）
+        ↓
+不再直接 500，而是给用户友好的错误提示
 ```
 
-计划新增的概念：
+计划补齐的内容：
 
-- `.env` 管理 API Key，`.env.example` 占位；
-- OpenAI-compatible 请求；
-- Prompt 设计：让模型按固定 JSON 结构返回；
-- 输出解析与容错（模型偶发不守格式）；
-- 超时、限流与失败重试；
-- 可替换的 LLM client 抽象（假 LLM 与真 API 切换）。
+- 网络异常（断网、超时）的优雅处理；
+- `LLM_PROVIDER` 非法值校验；
+- 输出结构校验加强（字段缺失、类型不符）；
+- 阶段 E：测试补全、模板化、README 收束。
 
 ## 11. 当前待改进项
 
@@ -366,7 +374,7 @@ mode=outline    → {"outline": ["要点1", "要点2", ...]}
 - 使用 Pydantic schema 统一 API 输入输出；
 - 为数据库操作、空内容、404 和生成流程补充测试（阶段 E）；
 - 增加列表页到详情页的链接；
-- 接入真实模型时补 `.env.example`，绝不提交真实 API Key；
+- 真实 LLM 调用失败的优雅提示（阶段 D 收尾）；
 - 代码风格统一（ruff 格式化）。
 
 ## 12. 相关学习笔记
