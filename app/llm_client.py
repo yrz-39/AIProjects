@@ -29,6 +29,8 @@ def generate(note: dict, mode: str) -> dict:
 
 def generate_real(note: dict, mode: str) -> dict:
     """调用真实 DeepSeek API,把笔记变成结构化问答卡/提纲"""
+    if mode not in ("flashcards", "outline"):
+        raise ValueError(f"不支持的模式{mode}")
 
     # 第一步：拿配置（密钥、服务器地址、模型名）
     cfg = get_config()

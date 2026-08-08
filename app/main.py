@@ -64,7 +64,7 @@ def view_notes():
         html_parts.append(
             f"<div>"
             f"<h2>{display_course}</h2>"
-            f"<h3>{display_title}</h3>"
+            f'<h3><a href="/api/notes/{note["id"]}">{display_title}</a></h3>'
             f"<p>{display_content}</p>"
             f"<small>{escape(note['created_at'])}</small>"
             f"</div><hr>"
