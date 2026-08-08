@@ -9,6 +9,9 @@ def get_config() -> dict:
     model = os.environ.get("DEEPSEEK_MODEL", "")
     provider = os.environ.get("LLM_PROVIDER", "fake")
 
+    if provider not in ("fake", "real"):
+        raise RuntimeError(f"LLM_PROVIDER 必须是 fake 或 real,当前是：{provider}")
+
     if not api_key:
         raise RuntimeError("缺少 DEEPSEEK_API_KEY,请在项目根目录的 .env 中配置")
 

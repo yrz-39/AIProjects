@@ -1,5 +1,5 @@
 # 接收一篇笔记 + 生成模式 -> 返回一份结构化的python字典
-from openai import OpenAI
+from openai import OpenAI,APIError
 from openai.types.chat import ChatCompletionMessageParam
 import json
 from app.config import get_config
@@ -63,10 +63,13 @@ def generate_real(note: dict, mode: str) -> dict:
     ]
 
     # 第五步：把纸条递过去，等服务器回复
-    resp = client.chat.completions.create(
-        model=cfg["model"],
-        messages=messages,
-    )
+    try:
+        resp = client.chat.completions.create(
+            model=cfg["model"],
+            messages=messages,
+        )
+    except APIError as error:
+        raise ValueError(f"调用大模型失败:{error}") from error
 
     # 第六步：从回复里抠出文本（模型说的话）
     text = resp.choices[0].message.content
